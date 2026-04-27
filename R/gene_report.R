@@ -1,4 +1,4 @@
-# gene_report.R — interactive gene annotation report via DT::datatable
+# gene_report.R - interactive gene annotation report via DT::datatable
 
 #' Produce an interactive annotation report for a gene
 #'
@@ -46,7 +46,7 @@ gene_report <- function(
     dt_options  = list(pageLength = 20, scrollX = TRUE),
     ...) {
 
-  # ── Filter to symbol if supplied ─────────────────────────────────────────────
+  # Filter to symbol if supplied 
   if (!is.null(symbol)) {
     if (!is.character(symbol) || length(symbol) != 1L)
       stop("`symbol` must be a single character string.", call. = FALSE)
@@ -70,10 +70,10 @@ gene_report <- function(
   gene_sym  <- unique(gaf$db_object_symbol)
   gene_name <- unique(gaf$db_object_name)[[1L]]
 
-  # ── Fetch GO labels from GO.ddb ───────────────────────────────────────────────
+  # Fetch GO labels from GO.ddb 
   go_labels <- .fetch_go_labels(unique(gaf$go_id))
 
-  # ── Merge labels into gaf ─────────────────────────────────────────────────────
+  # Merge labels into gaf 
   gaf <- merge(
     gaf,
     go_labels,
@@ -82,20 +82,20 @@ gene_report <- function(
     sort  = FALSE
   )
 
-  # ── Format db_reference as PubMed hyperlinks ──────────────────────────────────
+  # Format db_reference as PubMed hyperlinks 
   gaf$db_reference <- .format_references(gaf$db_reference, pubmed_base)
 
-  # ── Select and order columns ──────────────────────────────────────────────────
+  # Select and order columns 
   if (identical(columns, "all")) {
     display_cols <- colnames(gaf)
   } else {
-    # Keep only columns that exist — go_label may be absent if GO.ddb unavailable
+    # Keep only columns that exist - go_label may be absent if GO.ddb unavailable
     display_cols <- intersect(columns, colnames(gaf))
   }
 
   display <- gaf[, display_cols, drop = FALSE]
 
-  # ── Render datatable ──────────────────────────────────────────────────────────
+  # Render datatable 
   caption <- sprintf(
     "GO annotations for %s (%s) &mdash; %d annotation(s)",
     gene_sym, gene_name, nrow(gaf)
@@ -115,7 +115,7 @@ gene_report <- function(
 }
 
 
-# ── Internal helpers ──────────────────────────────────────────────────────────
+# Internal helpers 
 
 # Fetch GO term labels from GO.ddb if available.
 # Returns a data.frame with columns go_id and go_label.
@@ -129,7 +129,7 @@ gene_report <- function(
 
   if (!requireNamespace("GO.ddb", quietly = TRUE)) {
     warning(
-      "GO.ddb is not installed — GO term labels will be omitted.\n",
+      "GO.ddb is not installed - GO term labels will be omitted.\n",
       "Install GO.ddb and call GO.ddb::make_go_con() to enable labels.",
       call. = FALSE
     )
@@ -138,7 +138,7 @@ gene_report <- function(
 
   if (!GO.ddb::go_connection_active()) {
     warning(
-      "No active GO.ddb connection — GO term labels will be omitted.\n",
+      "No active GO.ddb connection - GO term labels will be omitted.\n",
       "Call GO.ddb::make_go_con() before gene_report().",
       call. = FALSE
     )
@@ -156,7 +156,7 @@ gene_report <- function(
   }, error = function(e) {
     warning(
       "GO label lookup failed: ", conditionMessage(e),
-      " — GO term labels will be omitted.",
+      " - GO term labels will be omitted.",
       call. = FALSE
     )
     empty

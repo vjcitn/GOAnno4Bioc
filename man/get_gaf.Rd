@@ -2,28 +2,46 @@
 % Please edit documentation in R/gaf_cache.R
 \name{get_gaf}
 \alias{get_gaf}
-\title{Parse a species GAF file in one step}
+\title{Parse a species GAF file into a tibble}
 \usage{
-get_gaf(species, ..., force = FALSE)
+get_gaf(species, ..., backend = c("auto", "parquet", "gaf"), force = FALSE)
 }
 \arguments{
 \item{species}{character scalar, e.g. \code{"human"}, \code{"mouse"}.}
 
-\item{...}{additional arguments passed to \code{\link{parse_gaf}},
-e.g. \code{filter_not}, \code{evidence_codes}, \code{filter_taxon}.}
+\item{...}{additional arguments passed to \code{\link{gaf_collect}}
+or \code{\link{parse_gaf}}: \code{filter_not}, \code{filter_taxon},
+\code{evidence_codes}.}
 
-\item{force}{logical passed to \code{\link{gaf_cache}}.}
+\item{backend}{one of \code{"auto"} (default), \code{"parquet"}, or
+\code{"gaf"}.  \code{"auto"} uses parquet if available.}
+
+\item{force}{logical.  For \code{backend = "gaf"}, re-download the
+\code{.gaf.gz} even if cached.  Default \code{FALSE}.}
 }
 \value{
-a tibble as returned by \code{\link{parse_gaf}}.
+a tibble equivalent to the output of \code{\link{parse_gaf}}.
 }
 \description{
-Convenience wrapper combining \code{\link{gaf_cache}} and
-\code{\link{parse_gaf}}.
+Convenience wrapper that auto-selects the fastest available backend:
+parquet (via \code{\link{gaf_tbl}} + \code{\link{gaf_collect}}) if a
+parquet cache exists, otherwise the \code{.gaf.gz} file via
+\code{\link{parse_gaf}}.  Build the parquet cache once with
+\code{\link{build_gaf_parquet}} to make subsequent calls fast.
 }
 \examples{
+# First call downloads and parses .gaf.gz (slow)
 gaf <- get_gaf("human", filter_taxon = 9606L,
                evidence_codes = GAF_EVIDENCE_EXPERIMENTAL)
-gaf
 
+# After build_gaf_parquet("human"), subsequent calls are fast
+if (has_gaf_parquet("human")) {
+  gaf <- get_gaf("human", filter_taxon = 9606L,
+                 evidence_codes = GAF_EVIDENCE_EXPERIMENTAL)
+}
+
+}
+\seealso{
+\code{\link{build_gaf_parquet}}, \code{\link{gaf_tbl}},
+\code{\link{parse_gaf}}
 }

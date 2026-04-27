@@ -1,13 +1,42 @@
-# gaf_parquet.R — parquet cache management and lazy tbl access for GAF data
+# gaf_parquet.R - parquet cache management and lazy tbl access for GAF data
 #
 # Workflow:
-#   1. gaf_cache("human")          — download/cache the .gaf.gz via BiocFileCache
-#   2. build_gaf_parquet("human")  — convert to parquet (one-time, ~seconds)
-#   3. gaf_tbl("human")            — lazy tbl_duckdb for dplyr composition
-#   4. get_gaf("human", ...)       — eager tibble (auto-selects parquet if present)
+#   1. gaf_cache("human")          - download/cache the .gaf.gz via BiocFileCache
+#   2. build_gaf_parquet("human")  - convert to parquet (one-time, ~seconds)
+#   3. gaf_tbl("human")            - lazy tbl_duckdb for dplyr composition
+#   4. get_gaf("human", ...)       - eager tibble (auto-selects parquet if present)
 #
 # The parquet file is stored alongside the gaf.gz in a subdirectory of the
 # BiocFileCache root, one file per species.
+
+#' Directory for parquet-converted GAF files
+#'
+#' Close the connection held by a gaf_tbl
+#'
+#' When \code{\link{gaf_tbl}} opens its own DuckDB connection (i.e. no
+#' \code{con} argument was supplied), the connection is stored as an
+#' attribute on the returned tbl and stays open for the lifetime of the
+#' tbl object.  Call \code{gaf_tbl_disconnect()} to close it explicitly,
+#' for example at the end of a script or test.
+#'
+#' @param tbl a tbl as returned by \code{\link{gaf_tbl}}.
+#' @return \code{NULL} invisibly.
+#'
+#' @examples
+#' if (has_gaf_parquet("human")) {
+#'   t <- gaf_tbl("human")
+#'   result <- t |> dplyr::filter(db_object_symbol == "IL6") |> gaf_collect()
+#'   gaf_tbl_disconnect(t)
+#' }
+#'
+#' @export
+gaf_tbl_disconnect <- function(tbl) {
+  con <- attr(tbl, "._gaf_con")
+  if (!is.null(con) && DBI::dbIsValid(con))
+    DBI::dbDisconnect(con, shutdown = TRUE)
+  invisible(NULL)
+}
+
 
 #' Directory for parquet-converted GAF files
 #'
@@ -37,7 +66,7 @@
   )
 }
 
-# DuckDB column type overrides — all character to preserve raw GAF values.
+# DuckDB column type overrides - all character to preserve raw GAF values.
 # Derived columns (date parsing, taxon splitting, ro_predicate) are added
 # by .enrich_gaf_tbl() after reading.
 .gaf_column_types_sql <- function() {
@@ -66,7 +95,7 @@ has_gaf_parquet <- function(species = "human") {
 #'
 #' Reads the cached \code{.gaf.gz} file via DuckDB (which handles gzip
 #' decompression and TSV parsing natively) and writes a ZSTD-compressed
-#' parquet file.  This is a one-time operation per species per release —
+#' parquet file.  This is a one-time operation per species per release -
 #' subsequent calls to \code{\link{gaf_tbl}} and \code{\link{get_gaf}}
 #' use the parquet file directly without touching the \code{.gaf.gz}.
 #'
@@ -123,11 +152,11 @@ build_gaf_parquet <- function(species = "human", force = FALSE) {
          delim         = '\t',
          header        = false,
          compression   = 'gzip',
+         comment       = '!',
          column_names  = [%s],
-         dtypes        = {%s},
+         types         = {%s},
          ignore_errors = true
        )
-       WHERE db NOT LIKE '!%%'
      ) TO '%s'
      (FORMAT PARQUET, COMPRESSION ZSTD)",
     gaf_path,
@@ -162,7 +191,7 @@ build_gaf_parquet <- function(species = "human", force = FALSE) {
 #' Returns a lazy \code{tbl_duckdb} backed by the parquet file for the
 #' requested species.  dplyr verbs (\code{filter}, \code{select},
 #' \code{count}, etc.) are translated to SQL and executed by DuckDB with
-#' full predicate pushdown — only matching rows and columns are read from
+#' full predicate pushdown - only matching rows and columns are read from
 #' disk.
 #'
 #' The returned tbl has all 17 raw GAF columns plus three derived columns
@@ -218,8 +247,9 @@ gaf_tbl <- function(species = "human", con = NULL) {
          regexp_extract(split_part(taxon, '|', 1), '[0-9]+', 0)
        AS INTEGER) AS taxon_subject,
        -- taxon_interactor: integer from second taxon if present, else NULL
+       -- contains() used for boolean pipe test - regexp_matches() returns VARCHAR[]
        TRY_CAST(
-         CASE WHEN regexp_matches(taxon, '[|]')
+         CASE WHEN contains(taxon, '|')
               THEN regexp_extract(split_part(taxon, '|', 2), '[0-9]+', 0)
               ELSE NULL
          END
@@ -237,20 +267,13 @@ gaf_tbl <- function(species = "human", con = NULL) {
 
   tbl <- dplyr::tbl(con, view_name)
 
-  # Attach a finalizer to disconnect if we own the connection.
-  # This runs when the tbl is garbage collected — not ideal, but avoids
-  # leaking connections when gaf_tbl() is called interactively.
+  # Keep the connection alive by storing it as an attribute on the tbl.
+  # The connection is owned by this tbl - it will be disconnected when
+  # the tbl is no longer referenced, via the connection object's own
+  # garbage collection in duckdb.
   # Users working programmatically should pass their own con and manage it.
-  if (owns_con) {
-    reg.finalizer(
-      environment(attr(tbl, "src")$con),
-      function(e) tryCatch(
-        DBI::dbDisconnect(con, shutdown = TRUE),
-        error = function(x) NULL
-      ),
-      onexit = TRUE
-    )
-  }
+  if (owns_con)
+    attr(tbl, "._gaf_con") <- con
 
   tbl
 }
@@ -290,7 +313,7 @@ gaf_collect <- function(tbl,
                         filter_taxon   = NULL,
                         evidence_codes = NULL) {
 
-  # Apply filters as lazy SQL before collect() — predicate pushdown
+  # Apply filters as lazy SQL before collect() - predicate pushdown
   if (filter_not)
     tbl <- tbl |>
       dplyr::filter(is.na(qualifier) | qualifier != "NOT")

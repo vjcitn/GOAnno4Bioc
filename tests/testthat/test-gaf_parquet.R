@@ -36,11 +36,11 @@
          delim         = '\t',
          header        = false,
          compression   = 'gzip',
+         comment       = '!',
          column_names  = [%s],
-         dtypes        = {%s},
+         types         = {%s},
          ignore_errors = true
        )
-       WHERE db NOT LIKE '!%%'
      ) TO '%s'
      (FORMAT PARQUET, COMPRESSION ZSTD)",
     gaf_gz, col_names, col_types, out_path
@@ -127,7 +127,7 @@ test_that("gaf_collect() returns a tibble", {
      SELECT *,
        TRY_CAST(regexp_extract(split_part(taxon, '|', 1), '[0-9]+', 0) AS INTEGER) AS taxon_subject,
        TRY_CAST(
-         CASE WHEN regexp_matches(taxon, '[|]')
+         CASE WHEN contains(taxon, '|')
               THEN regexp_extract(split_part(taxon, '|', 2), '[0-9]+', 0)
               ELSE NULL END
        AS INTEGER) AS taxon_interactor,
@@ -158,7 +158,7 @@ test_that("gaf_collect() date column is Date class", {
      SELECT *,
        TRY_CAST(regexp_extract(split_part(taxon, '|', 1), '[0-9]+', 0) AS INTEGER) AS taxon_subject,
        TRY_CAST(
-         CASE WHEN regexp_matches(taxon, '[|]')
+         CASE WHEN contains(taxon, '|')
               THEN regexp_extract(split_part(taxon, '|', 2), '[0-9]+', 0)
               ELSE NULL END
        AS INTEGER) AS taxon_interactor,
@@ -187,7 +187,7 @@ test_that("gaf_collect() filter_not excludes NOT rows", {
      SELECT *,
        TRY_CAST(regexp_extract(split_part(taxon, '|', 1), '[0-9]+', 0) AS INTEGER) AS taxon_subject,
        TRY_CAST(
-         CASE WHEN regexp_matches(taxon, '[|]')
+         CASE WHEN contains(taxon, '|')
               THEN regexp_extract(split_part(taxon, '|', 2), '[0-9]+', 0)
               ELSE NULL END
        AS INTEGER) AS taxon_interactor,
@@ -219,7 +219,7 @@ test_that("gaf_collect() filter_taxon works", {
      SELECT *,
        TRY_CAST(regexp_extract(split_part(taxon, '|', 1), '[0-9]+', 0) AS INTEGER) AS taxon_subject,
        TRY_CAST(
-         CASE WHEN regexp_matches(taxon, '[|]')
+         CASE WHEN contains(taxon, '|')
               THEN regexp_extract(split_part(taxon, '|', 2), '[0-9]+', 0)
               ELSE NULL END
        AS INTEGER) AS taxon_interactor,
@@ -260,7 +260,10 @@ test_that("gaf_tbl() result has expected columns", {
   testthat::skip_if_not(GOAnno4Bioc::has_gaf_parquet("human"),
     "human parquet not built")
 
-  cols <- colnames(GOAnno4Bioc::gaf_tbl("human"))
+  t <- GOAnno4Bioc::gaf_tbl("human")
+  on.exit(GOAnno4Bioc::gaf_tbl_disconnect(t), add = TRUE)
+
+  cols <- colnames(t)
   expect_true(all(GOAnno4Bioc::GAF_COLUMNS %in% cols))
   expect_true("ro_predicate"     %in% cols)
   expect_true("taxon_subject"    %in% cols)
@@ -271,7 +274,10 @@ test_that("gaf_tbl() supports symbol filter before collect", {
   testthat::skip_if_not(GOAnno4Bioc::has_gaf_parquet("human"),
     "human parquet not built")
 
-  result <- GOAnno4Bioc::gaf_tbl("human") |>
+  t <- GOAnno4Bioc::gaf_tbl("human")
+  on.exit(GOAnno4Bioc::gaf_tbl_disconnect(t), add = TRUE)
+
+  result <- t |>
     dplyr::filter(db_object_symbol == "ORMDL3") |>
     GOAnno4Bioc::gaf_collect()
 
