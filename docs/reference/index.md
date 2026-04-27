@@ -27,6 +27,8 @@
 -   `gaf_known_species()` : List species with known GAF download URLs
 -   `gaf_to_term_association()` : Convert a parsed GAF tibble to semsql
     term\_association format
+-   `gene_report()` : Produce an interactive annotation report for a
+    gene
 -   `get_gaf()` : Parse a species GAF file in one step
 -   `parse_gaf()` : Parse a GAF 2.x annotation file into a tibble
 

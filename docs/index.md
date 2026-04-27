@@ -9,8 +9,8 @@ Ontology Annotation resources from GO Consortium.
 
 -   An exemplary gaf.gz file from March 2026 is provided in inst/human
 
--   A parsing function, `ingestGAF` produces a tibble with the
-    annotations
+-   Supports parsing of GAF and tidy manipulations of GO annotations to
+    model organisms
 
 </div>
 
