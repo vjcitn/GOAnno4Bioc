@@ -181,9 +181,10 @@ gene_report <- function(
           pubmed_base, pmid, r
         )
       } else if (startsWith(r, "GO_REF:")) {
+        go_ref_id <- sub("^GO_REF:", "", r)
         sprintf(
-          '<a href="https://identifiers.org/%s" target="_blank">%s</a>',
-          r, r   # r is already "GO_REF:0000033" — identifiers.org accepts this directly
+          '<a href="https://github.com/geneontology/go-site/blob/master/metadata/gorefs/goref-%s.md" target="_blank">%s</a>',
+          go_ref_id, r
         )
       } else {
         # Return unlinked for unrecognised prefixes (e.g. AGRICOLA:, CGD:)

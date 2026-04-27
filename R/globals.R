@@ -6,5 +6,7 @@ utils::globalVariables(c(
   "evidence_category",
   "taxon_interactor",
   "taxon_subject",
+  "qualifier",
+  "db_object_symbol",
   "n"
 ))

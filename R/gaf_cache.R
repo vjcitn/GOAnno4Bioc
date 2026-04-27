@@ -166,25 +166,59 @@ gaf_cache <- function(species  = NULL,
 }
 
 
-#' Parse a species GAF file in one step
+#' Parse a species GAF file into a tibble
 #'
-#' Convenience wrapper combining \code{\link{gaf_cache}} and
-#' \code{\link{parse_gaf}}.
+#' Convenience wrapper that auto-selects the fastest available backend:
+#' parquet (via \code{\link{gaf_tbl}} + \code{\link{gaf_collect}}) if a
+#' parquet cache exists, otherwise the \code{.gaf.gz} file via
+#' \code{\link{parse_gaf}}.  Build the parquet cache once with
+#' \code{\link{build_gaf_parquet}} to make subsequent calls fast.
 #'
 #' @param species character scalar, e.g. \code{"human"}, \code{"mouse"}.
-#' @param ... additional arguments passed to \code{\link{parse_gaf}},
-#'   e.g. \code{filter_not}, \code{evidence_codes}, \code{filter_taxon}.
-#' @param force logical passed to \code{\link{gaf_cache}}.
+#' @param ... additional arguments passed to \code{\link{gaf_collect}}
+#'   or \code{\link{parse_gaf}}: \code{filter_not}, \code{filter_taxon},
+#'   \code{evidence_codes}.
+#' @param backend one of \code{"auto"} (default), \code{"parquet"}, or
+#'   \code{"gaf"}.  \code{"auto"} uses parquet if available.
+#' @param force logical.  For \code{backend = "gaf"}, re-download the
+#'   \code{.gaf.gz} even if cached.  Default \code{FALSE}.
 #'
-#' @return a tibble as returned by \code{\link{parse_gaf}}.
+#' @return a tibble equivalent to the output of \code{\link{parse_gaf}}.
 #'
 #' @examples
+#' # First call downloads and parses .gaf.gz (slow)
 #' gaf <- get_gaf("human", filter_taxon = 9606L,
 #'                evidence_codes = GAF_EVIDENCE_EXPERIMENTAL)
-#' gaf
+#'
+#' # After build_gaf_parquet("human"), subsequent calls are fast
+#' if (has_gaf_parquet("human")) {
+#'   gaf <- get_gaf("human", filter_taxon = 9606L,
+#'                  evidence_codes = GAF_EVIDENCE_EXPERIMENTAL)
+#' }
+#'
+#' @seealso \code{\link{build_gaf_parquet}}, \code{\link{gaf_tbl}},
+#'   \code{\link{parse_gaf}}
 #'
 #' @export
-get_gaf <- function(species, ..., force = FALSE) {
-  path <- gaf_cache(species = species, force = force)
-  parse_gaf(path, ...)
+get_gaf <- function(species,
+                    ...,
+                    backend = c("auto", "parquet", "gaf"),
+                    force   = FALSE) {
+  backend <- match.arg(backend)
+
+  if (backend == "auto")
+    backend <- if (has_gaf_parquet(species)) "parquet" else "gaf"
+
+  if (backend == "parquet") {
+    if (!has_gaf_parquet(species))
+      stop(
+        "No parquet cache for '", species, "'.\n",
+        "Run build_gaf_parquet('", species, "') first, or use backend = 'gaf'.",
+        call. = FALSE
+      )
+    gaf_tbl(species) |> gaf_collect(...)
+  } else {
+    path <- gaf_cache(species = species, force = force)
+    parse_gaf(path, ...)
+  }
 }
